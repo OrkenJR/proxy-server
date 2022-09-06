@@ -1,11 +1,10 @@
-package com.example.proxyserver;
+package com.example.proxyserver.filters;
 
 import com.example.proxyserver.feign.AuthFeign;
 import com.example.proxyserver.model.ErrorResponseDto;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.jsonwebtoken.ExpiredJwtException;
-import io.jsonwebtoken.JwtException;
+import io.jsonwebtoken.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang.StringUtils;
@@ -46,14 +45,22 @@ public class AuthPostFilter implements GatewayFilter {
                     log.warn("Token is null");
                     return this.onError(exchange, "UNAUTHORIZED", HttpStatus.UNAUTHORIZED);
                 }
-                ResponseEntity<Boolean> response = authFeign.validateToken(bearerToken);
-                if (!response.getStatusCode().is2xxSuccessful() || response.getBody() == null) {
-                    HttpStatus errorCode = HttpStatus.BAD_GATEWAY;
-                    String errorMsg = HttpStatus.BAD_GATEWAY.getReasonPhrase();
-                    return onError(exchange, errorMsg, errorCode);
-                } else if (response.getBody() != null && Boolean.TRUE.equals(response.getBody())) {
-                    return chain.filter(exchange);
+
+                if(!validateToken(bearerToken)){
+                    log.warn("Token Invalid!");
+                    return this.onError(exchange, "Authorization header is invalid", HttpStatus.UNAUTHORIZED);
                 }
+
+                // Тут пытался запрос в auth-service делать, какая-то непонятная ошибка
+
+//                ResponseEntity<Boolean> response = authFeign.validateToken(bearerToken);
+//                if (!response.getStatusCode().is2xxSuccessful() || response.getBody() == null) {
+//                    HttpStatus errorCode = HttpStatus.BAD_GATEWAY;
+//                    String errorMsg = HttpStatus.BAD_GATEWAY.getReasonPhrase();
+//                    return onError(exchange, errorMsg, errorCode);
+//                } else if (response.getBody() != null && Boolean.TRUE.equals(response.getBody())) {
+//                    return chain.filter(exchange);
+//                }
             } catch (ExpiredJwtException e) {
                 log.warn("Token Expired!");
                 return this.onError(exchange, "Authorization header has expired", HttpStatus.UNAUTHORIZED);
@@ -79,5 +86,17 @@ public class AuthPostFilter implements GatewayFilter {
             e.printStackTrace();
         }
         return response.setComplete();
+    }
+
+    public boolean validateToken(String token) {
+        try {
+            Jws<Claims> claims = Jwts.parser()
+                    .setSigningKey("signingKey") // в auth-service пытался один и тот же key поставить, без Base64.encode, не помогло ((((
+                    .parseClaimsJws(token);
+            return (!claims.getBody().getExpiration().before(new Date()));
+        } catch (JwtException | IllegalArgumentException e) {
+            log.error("Expired or invalid JWT token");
+            return false;
+        }
     }
 }

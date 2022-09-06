@@ -1,5 +1,6 @@
-package com.example.proxyserver;
+package com.example.proxyserver.config;
 
+import com.example.proxyserver.filters.AuthPostFilter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.cloud.client.loadbalancer.LoadBalanced;
@@ -24,13 +25,11 @@ public class RouteConfig {
 
                 .route("auth-service", r -> r.path("/auth/**")
                         .filters(f -> f
-                                .filter(authPostFilter)
-                                .stripPrefix(1))
+                                .filter(authPostFilter))
                         .uri("lb://auth-service"))
                 .route("user-management-route", r -> r.path("/userApi/**")
                         .filters(f -> f
-                                .filter(authPostFilter)
-                                .stripPrefix(1))
+                                .filter(authPostFilter))
                         .uri("lb://user-management"))
                 .build();
     }
