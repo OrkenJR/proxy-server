@@ -27,10 +27,12 @@ public class RouteConfig {
                         .filters(f -> f
                                 .filter(authPostFilter))
                         .uri("lb://auth-service"))
+
                 .route("user-management-route", r -> r.path("/userApi/**")
                         .filters(f -> f
                                 .filter(authPostFilter))
                         .uri("lb://user-management"))
+
                 .build();
     }
 

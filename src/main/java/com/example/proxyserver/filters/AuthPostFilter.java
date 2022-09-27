@@ -4,16 +4,14 @@ import com.example.proxyserver.feign.AuthFeign;
 import com.example.proxyserver.model.ErrorResponseDto;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.jsonwebtoken.*;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import lombok.SneakyThrows;
 import org.apache.commons.lang.StringUtils;
 import org.springframework.cloud.context.config.annotation.RefreshScope;
 import org.springframework.cloud.gateway.filter.GatewayFilter;
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;
 import org.springframework.core.io.buffer.DataBufferFactory;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
 import org.springframework.http.server.reactive.ServerHttpRequest;
 import org.springframework.http.server.reactive.ServerHttpResponse;
 import org.springframework.stereotype.Component;
@@ -21,54 +19,43 @@ import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 
 import java.util.Date;
+import java.util.concurrent.CompletableFuture;
 import java.util.function.Predicate;
 import java.util.stream.Stream;
 
 @RefreshScope
 @Component
-@Slf4j
 @RequiredArgsConstructor
 public class AuthPostFilter implements GatewayFilter {
+
     private final AuthFeign authFeign;
-    public Predicate<ServerHttpRequest> isSecured = request -> Stream.of("/login", "/register").noneMatch(uri -> request.getURI().getPath().contains(uri));
+
+    private static final Predicate<ServerHttpRequest> isSecured =
+            request -> Stream.of("/login", "/register").noneMatch(uri -> request.getURI().getPath().contains(uri));
+
+    private static final String AUTHORIZATION_HEADER = "Authorization";
 
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
         ServerHttpRequest req = exchange.getRequest();
-        log.info("URL is - " + req.getURI().getPath());
+
         if (isSecured.test(req)) {
             try {
-                String bearerToken = req.getHeaders().getFirst("Authorization");
-                log.info("Bearer Token: " + bearerToken);
+                String token = req.getHeaders().getFirst(AUTHORIZATION_HEADER);
 
-                if (StringUtils.isBlank(bearerToken)) {
-                    log.warn("Token is null");
+                if (StringUtils.isBlank(token)) {
                     return this.onError(exchange, "UNAUTHORIZED", HttpStatus.UNAUTHORIZED);
                 }
 
-                if(!validateToken(bearerToken)){
-                    log.warn("Token Invalid!");
+                if (!validateToken(token)) {
                     return this.onError(exchange, "Authorization header is invalid", HttpStatus.UNAUTHORIZED);
                 }
 
-                // Тут пытался запрос в auth-service делать, какая-то непонятная ошибка
-
-//                ResponseEntity<Boolean> response = authFeign.validateToken(bearerToken);
-//                if (!response.getStatusCode().is2xxSuccessful() || response.getBody() == null) {
-//                    HttpStatus errorCode = HttpStatus.BAD_GATEWAY;
-//                    String errorMsg = HttpStatus.BAD_GATEWAY.getReasonPhrase();
-//                    return onError(exchange, errorMsg, errorCode);
-//                } else if (response.getBody() != null && Boolean.TRUE.equals(response.getBody())) {
-//                    return chain.filter(exchange);
-//                }
-            } catch (ExpiredJwtException e) {
-                log.warn("Token Expired!");
-                return this.onError(exchange, "Authorization header has expired", HttpStatus.UNAUTHORIZED);
-            } catch (JwtException e) {
-                log.warn("Token Invalid!");
-                return this.onError(exchange, "Authorization header is invalid", HttpStatus.UNAUTHORIZED);
+            } catch (RuntimeException e) {
+                return onError(exchange, e.getMessage(), HttpStatus.UNAUTHORIZED);
             }
         }
+
         return chain.filter(exchange);
     }
 
@@ -79,8 +66,9 @@ public class AuthPostFilter implements GatewayFilter {
         response.setStatusCode(httpStatus);
         try {
             response.getHeaders().add("Content-Type", "application/json");
+            // todo era Inappropriate blocking method call
             byte[] byteData = objMapper.writeValueAsBytes(new ErrorResponseDto(httpStatus, "auth-error", err, new Date()));
-            return response.writeWith(Mono.just(byteData).map(t -> dataBufferFactory.wrap(t)));
+            return response.writeWith(Mono.just(byteData).map(dataBufferFactory::wrap));
 
         } catch (JsonProcessingException e) {
             e.printStackTrace();
@@ -88,15 +76,18 @@ public class AuthPostFilter implements GatewayFilter {
         return response.setComplete();
     }
 
+    @SneakyThrows
     public boolean validateToken(String token) {
+        CompletableFuture<Boolean> completableFuture = CompletableFuture.supplyAsync(() -> authFeign.validateToken(token));
+
+        Boolean resp;
         try {
-            Jws<Claims> claims = Jwts.parser()
-                    .setSigningKey("signingKey") // в auth-service пытался один и тот же key поставить, без Base64.encode, не помогло ((((
-                    .parseClaimsJws(token);
-            return (!claims.getBody().getExpiration().before(new Date()));
-        } catch (JwtException | IllegalArgumentException e) {
-            log.error("Expired or invalid JWT token");
+            resp = completableFuture.get();
+        } catch (Exception ex) {
             return false;
         }
+
+        return resp;
     }
+
 }
