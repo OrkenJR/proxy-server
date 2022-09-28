@@ -23,8 +23,10 @@ public class RouteConfig {
 
                 .route("auth-service", r -> r.path("/auth/**")
                         .uri("lb://auth-service"))
+
                 .route("user-management-route", r -> r.path("/userApi/**")
                         .uri("lb://user-management"))
+
                 .build();
     }
 
