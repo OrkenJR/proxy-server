@@ -1,5 +1,6 @@
 package com.example.proxyserver.config;
 
+import com.example.proxyserver.filters.AuthPostFilter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.cloud.client.loadbalancer.LoadBalanced;
@@ -15,16 +16,17 @@ import org.springframework.web.reactive.function.client.WebClient;
 @Component
 @RequiredArgsConstructor
 public class RouteConfig {
+    private final AuthPostFilter authPostFilter;
 
     @Bean
     public RouteLocator routes(
             RouteLocatorBuilder builder) {
         return builder.routes()
 
-                .route("auth-service", r -> r.path("/auth/**")
+                .route("auth-service", r -> r.path("/auth/**").filters(f -> f.filter(authPostFilter))
                         .uri("lb://auth-service"))
 
-                .route("user-management-route", r -> r.path("/userApi/**")
+                .route("user-management-route", r -> r.path("/user-api/**").filters(f -> f.filter(authPostFilter))
                         .uri("lb://user-management"))
 
                 .build();
