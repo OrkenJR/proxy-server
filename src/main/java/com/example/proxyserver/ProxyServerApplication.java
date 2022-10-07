@@ -6,7 +6,7 @@ import org.springframework.cloud.client.discovery.EnableDiscoveryClient;
 import org.springframework.cloud.netflix.eureka.EnableEurekaClient;
 import org.springframework.cloud.openfeign.EnableFeignClients;
 
-@SpringBootApplication
+@SpringBootApplication(scanBasePackages = {"kz.iitu.cfaslib", "com.example.proxyserver"})
 @EnableEurekaClient
 @EnableDiscoveryClient
 @EnableFeignClients

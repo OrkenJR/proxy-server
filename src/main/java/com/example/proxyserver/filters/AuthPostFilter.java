@@ -1,9 +1,9 @@
 package com.example.proxyserver.filters;
 
-import com.example.proxyserver.feign.AuthFeign;
 import com.example.proxyserver.model.ErrorResponseDto;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import kz.iitu.cfaslib.feign.AuthFeign;
 import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
 import org.apache.commons.lang.StringUtils;
@@ -19,6 +19,7 @@ import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 
 import java.util.Date;
+import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Predicate;
 import java.util.stream.Stream;
@@ -34,6 +35,7 @@ public class AuthPostFilter implements GatewayFilter {
             request -> Stream.of("/login", "/register").noneMatch(uri -> request.getURI().getPath().contains(uri));
 
     private static final String AUTHORIZATION_HEADER = "Authorization";
+    private static final String BEARER_PREFIX = "Bearer";
 
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
@@ -42,7 +44,10 @@ public class AuthPostFilter implements GatewayFilter {
         if (isSecured.test(req)) {
             try {
                 String token = req.getHeaders().getFirst(AUTHORIZATION_HEADER);
+                ;
 
+                token = (!Objects.isNull(token) && token.startsWith(BEARER_PREFIX)) ?
+                        token.substring(7) : null;
                 if (StringUtils.isBlank(token)) {
                     return this.onError(exchange, "UNAUTHORIZED", HttpStatus.UNAUTHORIZED);
                 }
