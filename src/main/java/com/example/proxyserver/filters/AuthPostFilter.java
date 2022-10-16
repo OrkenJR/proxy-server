@@ -19,10 +19,12 @@ import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 
 import java.util.Date;
-import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Predicate;
 import java.util.stream.Stream;
+
+import static kz.iitu.cfaslib.util.CfasConstants.AUTHORIZATION_HEADER;
+import static kz.iitu.cfaslib.util.SecureUtil.stripToken;
 
 @RefreshScope
 @Component
@@ -34,20 +36,13 @@ public class AuthPostFilter implements GatewayFilter {
     private static final Predicate<ServerHttpRequest> isSecured =
             request -> Stream.of("/login", "/register").noneMatch(uri -> request.getURI().getPath().contains(uri));
 
-    private static final String AUTHORIZATION_HEADER = "Authorization";
-    private static final String BEARER_PREFIX = "Bearer";
-
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
         ServerHttpRequest req = exchange.getRequest();
 
         if (isSecured.test(req)) {
             try {
-                String token = req.getHeaders().getFirst(AUTHORIZATION_HEADER);
-                ;
-
-                token = (!Objects.isNull(token) && token.startsWith(BEARER_PREFIX)) ?
-                        token.substring(7) : null;
+                String token = stripToken(req.getHeaders().getFirst(AUTHORIZATION_HEADER));
                 if (StringUtils.isBlank(token)) {
                     return this.onError(exchange, "UNAUTHORIZED", HttpStatus.UNAUTHORIZED);
                 }
@@ -60,7 +55,6 @@ public class AuthPostFilter implements GatewayFilter {
                 return onError(exchange, e.getMessage(), HttpStatus.UNAUTHORIZED);
             }
         }
-
         return chain.filter(exchange);
     }
 
