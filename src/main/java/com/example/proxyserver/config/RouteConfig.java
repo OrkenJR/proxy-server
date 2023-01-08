@@ -29,6 +29,9 @@ public class RouteConfig {
                 .route("user-management-route", r -> r.path("/user-api/**").filters(f -> f.filter(authPostFilter))
                         .uri("lb://user-management"))
 
+                .route("manufacture-service-route", r -> r.path("/manufacture-api/**").filters(f -> f.filter(authPostFilter))
+                        .uri("lb://manufacture-service"))
+
                 .build();
     }
 
